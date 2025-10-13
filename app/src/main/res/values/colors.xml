@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App brand colors -->
+    <color name="primary_blue">#1E88E5</color>
+    <color name="primary_blue_dark">#1565C0</color>
+
+    <!-- Optional: match your gradient background names if you used them -->
+    <color name="background_gradient_start">#0D1B2A</color>
+    <color name="background_gradient_end">#1B263B</color>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- God'sword.TV Theme -->
+    <style name="AppTheme" parent="Theme.Leanback">
+        <item name="colorPrimary">#4A90E2</item>
+        <item name="colorPrimaryDark">#3A7BC8</item>
+        <item name="colorAccent">#D4AF37</item>
+        <item name="android:windowBackground">#000000</item>
+    </style>
+</resources>

@@ -55,13 +55,14 @@ class MainActivity : FragmentActivity() {
                 headersState = BrowseSupportFragment.HEADERS_ENABLED
                 isHeadersTransitionOnBackEnabled = true
 
+                // FIXED: Use ContextCompat for API level compatibility
                 try {
-                    brandColor = resources.getColor(R.color.primary_blue, null)
+                    brandColor = ContextCompat.getColor(this@MainActivity, R.color.primary_blue)
                 } catch (e: Exception) {
                     Log.w(TAG, "Could not set brand color", e)
                 }
 
-                title = "God'sword.TV - हिंदी क्रिश्चियन वीडियो"
+                title = "God'sword.TV - हिंदी सुसमाचार वीडियो"
             }
 
             supportFragmentManager.beginTransaction()

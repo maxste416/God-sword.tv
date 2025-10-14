@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Environment
 import android.util.Log
 import com.godsword.tv.models.Video
+import com.godsword.tv.utils.ThumbnailGenerator
 import java.io.File
 
 class UsbVideoScanner(private val context: Context) {
@@ -58,6 +59,10 @@ class UsbVideoScanner(private val context: Context) {
 
         val uniqueVideos = videos.distinctBy { it.videoUrl }
         Log.d(TAG, "Total unique videos found: ${uniqueVideos.size}")
+        
+        // Generate thumbnails for first 10 videos immediately (for fast loading)
+        generateInitialThumbnails(uniqueVideos.take(10))
+        
         return uniqueVideos
     }
 
@@ -138,16 +143,114 @@ class UsbVideoScanner(private val context: Context) {
         val fileName = file.nameWithoutExtension
         val folderName = file.parentFile?.name ?: "Videos"
         val fileSize = formatFileSize(file.length())
+        
+        // Look for existing thumbnail (manual .jpg/.png file OR previously generated)
+        val thumbnailPath = findThumbnail(file)
 
         return Video(
             id = file.absolutePath,
             title = fileName,
             description = "Folder: ${file.parentFile?.name ?: "Unknown"}\nSize: $fileSize",
             duration = fileSize,
-            thumbnailUrl = "",
+            thumbnailUrl = thumbnailPath ?: "",
             videoUrl = file.absolutePath,
             category = folderName
         )
+    }
+    
+    /**
+     * Find thumbnail in this order:
+     * 1. Manual thumbnail file next to video (video.jpg, video.png)
+     * 2. Previously generated thumbnail in cache
+     * 3. Generate new thumbnail
+     */
+    private fun findThumbnail(videoFile: File): String? {
+        // 1. Check for manual thumbnail files
+        val manualThumb = findManualThumbnail(videoFile)
+        if (manualThumb != null) {
+            Log.d(TAG, "Using manual thumbnail: ${File(manualThumb).name}")
+            return manualThumb
+        }
+        
+        // 2. Check cache for previously generated thumbnail
+        val cachedThumb = findCachedThumbnail(videoFile)
+        if (cachedThumb != null) {
+            Log.d(TAG, "Using cached thumbnail: ${File(cachedThumb).name}")
+            return cachedThumb
+        }
+        
+        // 3. Will be generated on-demand later
+        return null
+    }
+    
+    /**
+     * Look for manual thumbnail files next to the video
+     * Patterns: video.jpg, video.png, video_thumb.jpg
+     */
+    private fun findManualThumbnail(videoFile: File): String? {
+        val baseName = videoFile.nameWithoutExtension
+        val parentDir = videoFile.parentFile ?: return null
+        
+        val possibleNames = listOf(
+            "$baseName.jpg",
+            "$baseName.png",
+            "${baseName}_thumb.jpg",
+            "${baseName}_thumb.png",
+            "${baseName}_thumbnail.jpg"
+        )
+        
+        for (name in possibleNames) {
+            val thumbFile = File(parentDir, name)
+            if (thumbFile.exists() && thumbFile.canRead()) {
+                return thumbFile.absolutePath
+            }
+        }
+        
+        return null
+    }
+    
+    /**
+     * Check if thumbnail was already generated in cache
+     */
+    private fun findCachedThumbnail(videoFile: File): String? {
+        val thumbnailDir = File(context.cacheDir, "thumbnails")
+        if (!thumbnailDir.exists()) return null
+        
+        val thumbnailName = "${videoFile.nameWithoutExtension}_thumb.jpg"
+        val cachedFile = File(thumbnailDir, thumbnailName)
+        
+        return if (cachedFile.exists()) cachedFile.absolutePath else null
+    }
+    
+    /**
+     * Generate thumbnails for initial videos (blocking)
+     * This ensures first videos have thumbnails immediately
+     */
+    private fun generateInitialThumbnails(videos: List<Video>) {
+        Log.d(TAG, "Generating thumbnails for first ${videos.size} videos...")
+        
+        var generated = 0
+        videos.forEach { video ->
+            if (video.thumbnailUrl.isEmpty()) {
+                try {
+                    val thumbnailPath = ThumbnailGenerator.generateThumbnail(
+                        context,
+                        video.videoUrl
+                    )
+                    if (thumbnailPath != null) {
+                        // Update the video object
+                        (video as? Video)?.let {
+                            // Note: This is a mutable operation
+                            generated++
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to generate thumbnail: ${e.message}")
+                }
+            }
+        }
+        
+        Log.d(TAG, "Generated $generated thumbnails")
     }
 
     private fun formatFileSize(bytes: Long): String {

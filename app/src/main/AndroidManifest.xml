@@ -14,14 +14,9 @@
         android:required="false" />
 
     <!-- Permissions -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
         android:maxSdkVersion="32" />
-    
-    <!-- Only request MANAGE_EXTERNAL_STORAGE if your app truly needs it -->
-    <!-- Remove this line if you don't need full storage access -->
     <uses-permission 
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
@@ -36,7 +31,7 @@
         android:supportsRtl="true"
         tools:targetApi="31">
 
-        <!-- Main Activity (Home Screen) -->
+        <!-- Main Activity - Direct USB Scanner -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -48,20 +43,6 @@
             </intent-filter>
         </activity>
 
-        <!-- USB Browser Activity -->
-        <activity
-            android:name=".usb.UsbBrowserActivity"
-            android:exported="false"
-            android:screenOrientation="landscape"
-            tools:ignore="LockedOrientationActivity" />
-
-        <!-- Video Details Activity -->
-        <activity
-            android:name=".VideoDetailsActivity"
-            android:exported="false"
-            android:screenOrientation="landscape"
-            tools:ignore="LockedOrientationActivity" />
-
         <!-- Playback Activity -->
         <activity
             android:name=".PlaybackActivity"
@@ -72,3 +53,4 @@
     </application>
 
 </manifest>
+

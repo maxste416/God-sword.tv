@@ -2,7 +2,7 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/loading_background"
+    android:background="#1A1A1A"
     android:padding="40dp">
 
     <!-- App Logo/Icon at Top -->
@@ -28,7 +28,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
             android:text="God'sword.TV"
-            android:textColor="@color/text_white"
+            android:textColor="#FFFFFF"
             android:textSize="36sp"
             android:textStyle="bold"
             android:shadowColor="#000000"
@@ -42,7 +42,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:text="हिंदी क्रिश्चियन वीडियो"
-            android:textColor="@color/accent_gold"
+            android:textColor="#FFD700"
             android:textSize="20sp"
             android:shadowColor="#000000"
             android:shadowDx="1"
@@ -65,7 +65,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Scanning USB Drive..."
-            android:textColor="@color/text_white"
+            android:textColor="#FFFFFF"
             android:textSize="20sp"
             android:shadowColor="#000000"
             android:shadowDx="1"
@@ -81,7 +81,8 @@
             android:layout_marginTop="20dp"
             android:max="100"
             android:progress="0"
-            android:progressDrawable="@drawable/progress_bar_style" />
+            android:progressTint="#FFD700"
+            android:progressBackgroundTint="#3D3D3D" />
 
         <!-- Progress Text (Videos Found) -->
         <TextView
@@ -90,7 +91,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="0 videos found..."
-            android:textColor="@color/text_gray"
+            android:textColor="#B0B0B0"
             android:textSize="16sp" />
 
         <!-- Animated Dots -->
@@ -100,7 +101,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:text="●●●"
-            android:textColor="@color/accent_gold"
+            android:textColor="#FFD700"
             android:textSize="24sp" />
     </LinearLayout>
 

@@ -1,10 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- App brand colors -->
-    <color name="primary_blue">#1E88E5</color>
-    <color name="primary_blue_dark">#1565C0</color>
-
-    <!-- Optional: match your gradient background names if you used them -->
-    <color name="background_gradient_start">#0D1B2A</color>
-    <color name="background_gradient_end">#1B263B</color>
+    <!-- Glossy Dark Theme Colors -->
+    <color name="primary_dark_gray">#1A1A1A</color>
+    <color name="secondary_gray">#2D2D2D</color>
+    <color name="accent_gray">#3D3D3D</color>
+    <color name="glossy_overlay">#80FFFFFF</color>
+    
+    <!-- Accent Colors -->
+    <color name="accent_gold">#FFD700</color>
+    <color name="accent_silver">#C0C0C0</color>
+    
+    <!-- Text Colors -->
+    <color name="text_white">#FFFFFF</color>
+    <color name="text_gray">#B0B0B0</color>
+    <color name="text_dim">#707070</color>
+    
+    <!-- Background Colors -->
+    <color name="background_black">#000000</color>
+    <color name="background_dark_gray">#121212</color>
+    <color name="background_card">#1E1E1E</color>
+    
+    <!-- Old colors (for compatibility) -->
+    <color name="primary_blue">#4A4A4A</color>
+    <color name="primary_blue_dark">#2D2D2D</color>
+    <color name="background_gradient_start">#000000</color>
+    <color name="background_gradient_end">#1A1A1A</color>
 </resources>

@@ -1,6 +1,7 @@
 package com.godsword.tv.usb
 
 import android.content.Context
+import android.os.Build
 import android.os.Environment
 import android.util.Log
 import com.godsword.tv.models.Video
@@ -22,8 +23,15 @@ class UsbVideoScanner(private val context: Context) {
     fun scanForVideos(): List<Video> {
         val videos = mutableListOf<Video>()
 
-        Log.d(TAG, "Starting comprehensive USB scan...")
+        Log.d(TAG, "Starting comprehensive video scan...")
+        
+        // EMULATOR TEST MODE: Check if running on emulator
+        val isEmulator = isEmulator()
+        if (isEmulator) {
+            Log.d(TAG, "🧪 EMULATOR DETECTED - Including test paths")
+        }
 
+        // 1. Scan external storage directories
         val externalDirs = context.getExternalFilesDirs(null)
         Log.d(TAG, "Found ${externalDirs.size} external storage locations")
 
@@ -38,7 +46,8 @@ class UsbVideoScanner(private val context: Context) {
             }
         }
 
-        val commonPaths = listOf(
+        // 2. Common USB mount points
+        val commonPaths = mutableListOf(
             "/storage/usbotg",
             "/storage/usb",
             "/storage/usb1",
@@ -48,22 +57,55 @@ class UsbVideoScanner(private val context: Context) {
             "/storage/sdcard1",
             Environment.getExternalStorageDirectory().absolutePath
         )
+        
+        // 3. EMULATOR: Add test video paths
+        if (isEmulator) {
+            commonPaths.add("/sdcard/TestVideos")
+            commonPaths.add("/sdcard/Movies")
+            commonPaths.add("/sdcard/Download")
+            Log.d(TAG, "🧪 Added emulator test paths")
+        }
 
         for (path in commonPaths) {
             val dir = File(path)
             if (dir.exists() && dir.canRead()) {
-                Log.d(TAG, "Scanning common path: $path")
+                Log.d(TAG, "Scanning path: $path")
                 videos.addAll(scanDirectory(dir, maxDepth = 4))
+            } else {
+                Log.d(TAG, "Path not accessible: $path")
             }
         }
 
         val uniqueVideos = videos.distinctBy { it.videoUrl }
-        Log.d(TAG, "Total unique videos found: ${uniqueVideos.size}")
+        Log.d(TAG, "✓ Total unique videos found: ${uniqueVideos.size}")
         
-        // Generate thumbnails for first 10 videos immediately (for fast loading)
-        generateInitialThumbnails(uniqueVideos.take(10))
+        if (uniqueVideos.isEmpty()) {
+            Log.w(TAG, "⚠️ No videos found! Check:")
+            Log.w(TAG, "  1. USB drive is connected (or test videos on emulator)")
+            Log.w(TAG, "  2. Storage permissions granted")
+            Log.w(TAG, "  3. Videos are in supported formats: ${VIDEO_EXTENSIONS.joinToString()}")
+        }
+        
+        // Generate thumbnails for first 10 videos
+        if (uniqueVideos.isNotEmpty()) {
+            generateInitialThumbnails(uniqueVideos.take(10))
+        }
         
         return uniqueVideos
+    }
+    
+    /**
+     * Detect if running on emulator
+     */
+    private fun isEmulator(): Boolean {
+        return (Build.FINGERPRINT.startsWith("generic")
+                || Build.FINGERPRINT.startsWith("unknown")
+                || Build.MODEL.contains("google_sdk")
+                || Build.MODEL.contains("Emulator")
+                || Build.MODEL.contains("Android SDK built for x86")
+                || Build.MANUFACTURER.contains("Genymotion")
+                || (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic"))
+                || "google_sdk" == Build.PRODUCT)
     }
 
     private fun findStorageRoot(directory: File): File? {
@@ -97,10 +139,12 @@ class UsbVideoScanner(private val context: Context) {
 
         try {
             if (!directory.canRead()) {
+                Log.d(TAG, "Cannot read directory: ${directory.absolutePath}")
                 return videos
             }
 
             val files = directory.listFiles() ?: return videos
+            Log.d(TAG, "Found ${files.size} items in ${directory.name}")
 
             for (file in files) {
                 try {
@@ -110,15 +154,15 @@ class UsbVideoScanner(private val context: Context) {
                         }
                         file.isFile && isVideoFile(file) && file.canRead() -> {
                             videos.add(createVideoFromFile(file))
-                            Log.d(TAG, "Found: ${file.name}")
+                            Log.d(TAG, "✓ Found video: ${file.name} (${formatFileSize(file.length())})")
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error processing file: ${file.name}")
+                    Log.e(TAG, "Error processing: ${file.name}", e)
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error scanning: ${directory.name}")
+            Log.e(TAG, "Error scanning directory: ${directory.name}", e)
         }
 
         return videos
@@ -128,7 +172,7 @@ class UsbVideoScanner(private val context: Context) {
         val name = folder.name.lowercase()
         val skipList = listOf(
             "android", "system", "data", "cache",
-            ".", "lost+found", "dcim", "download",
+            ".", "lost+found", "dcim",
             "thumbnails", ".thumbnails"
         )
         return skipList.any { name.contains(it) }
@@ -136,7 +180,14 @@ class UsbVideoScanner(private val context: Context) {
 
     private fun isVideoFile(file: File): Boolean {
         val extension = file.extension.lowercase()
-        return VIDEO_EXTENSIONS.contains(extension) && file.length() > 1024 * 1024
+        val isVideo = VIDEO_EXTENSIONS.contains(extension)
+        val isLargeEnough = file.length() > 1024 * 1024 // > 1MB
+        
+        if (isVideo && !isLargeEnough) {
+            Log.d(TAG, "Skipping small file: ${file.name} (${formatFileSize(file.length())})")
+        }
+        
+        return isVideo && isLargeEnough
     }
 
     private fun createVideoFromFile(file: File): Video {
@@ -144,49 +195,32 @@ class UsbVideoScanner(private val context: Context) {
         val folderName = file.parentFile?.name ?: "Videos"
         val fileSize = formatFileSize(file.length())
         
-        // Look for existing thumbnail (manual .jpg/.png file OR previously generated)
+        // Get actual video duration
+        val duration = ThumbnailGenerator.getVideoDuration(file.absolutePath)
+        
         val thumbnailPath = findThumbnail(file)
 
         return Video(
             id = file.absolutePath,
             title = fileName,
             description = "Folder: ${file.parentFile?.name ?: "Unknown"}\nSize: $fileSize",
-            duration = fileSize,
+            duration = duration, // Now shows actual duration like "5:32" or "1:23:45"
             thumbnailUrl = thumbnailPath ?: "",
             videoUrl = file.absolutePath,
             category = folderName
         )
     }
     
-    /**
-     * Find thumbnail in this order:
-     * 1. Manual thumbnail file next to video (video.jpg, video.png)
-     * 2. Previously generated thumbnail in cache
-     * 3. Generate new thumbnail
-     */
     private fun findThumbnail(videoFile: File): String? {
-        // 1. Check for manual thumbnail files
         val manualThumb = findManualThumbnail(videoFile)
-        if (manualThumb != null) {
-            Log.d(TAG, "Using manual thumbnail: ${File(manualThumb).name}")
-            return manualThumb
-        }
+        if (manualThumb != null) return manualThumb
         
-        // 2. Check cache for previously generated thumbnail
         val cachedThumb = findCachedThumbnail(videoFile)
-        if (cachedThumb != null) {
-            Log.d(TAG, "Using cached thumbnail: ${File(cachedThumb).name}")
-            return cachedThumb
-        }
+        if (cachedThumb != null) return cachedThumb
         
-        // 3. Will be generated on-demand later
         return null
     }
     
-    /**
-     * Look for manual thumbnail files next to the video
-     * Patterns: video.jpg, video.png, video_thumb.jpg
-     */
     private fun findManualThumbnail(videoFile: File): String? {
         val baseName = videoFile.nameWithoutExtension
         val parentDir = videoFile.parentFile ?: return null
@@ -195,13 +229,13 @@ class UsbVideoScanner(private val context: Context) {
             "$baseName.jpg",
             "$baseName.png",
             "${baseName}_thumb.jpg",
-            "${baseName}_thumb.png",
-            "${baseName}_thumbnail.jpg"
+            "${baseName}_thumb.png"
         )
         
         for (name in possibleNames) {
             val thumbFile = File(parentDir, name)
             if (thumbFile.exists() && thumbFile.canRead()) {
+                Log.d(TAG, "Found manual thumbnail: ${thumbFile.name}")
                 return thumbFile.absolutePath
             }
         }
@@ -209,9 +243,6 @@ class UsbVideoScanner(private val context: Context) {
         return null
     }
     
-    /**
-     * Check if thumbnail was already generated in cache
-     */
     private fun findCachedThumbnail(videoFile: File): String? {
         val thumbnailDir = File(context.cacheDir, "thumbnails")
         if (!thumbnailDir.exists()) return null
@@ -222,10 +253,6 @@ class UsbVideoScanner(private val context: Context) {
         return if (cachedFile.exists()) cachedFile.absolutePath else null
     }
     
-    /**
-     * Generate thumbnails for initial videos (blocking)
-     * This ensures first videos have thumbnails immediately
-     */
     private fun generateInitialThumbnails(videos: List<Video>) {
         Log.d(TAG, "Generating thumbnails for first ${videos.size} videos...")
         
@@ -238,11 +265,7 @@ class UsbVideoScanner(private val context: Context) {
                         video.videoUrl
                     )
                     if (thumbnailPath != null) {
-                        // Update the video object
-                        (video as? Video)?.let {
-                            // Note: This is a mutable operation
-                            generated++
-                        }
+                        generated++
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to generate thumbnail: ${e.message}")

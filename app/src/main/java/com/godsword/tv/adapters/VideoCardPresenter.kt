@@ -106,19 +106,19 @@ class VideoCardPresenter : Presenter() {
     }
     
     /**
-     * Get color based on video category
+     * Get color based on video category (Dark glossy theme)
      */
     private fun getCategoryColor(category: String): Int {
         return when (category.lowercase()) {
-            "worship", "aaradhana", "आराधना" -> Color.parseColor("#9C27B0") // Purple
-            "sermons", "sermon", "updesh", "उपदेश" -> Color.parseColor("#2196F3") // Blue
-            "bible-stories", "stories", "kahaniya", "कहानियाँ" -> Color.parseColor("#FF9800") // Orange
-            "kids", "bacho-ke-liye", "बच्चों-के-लिए" -> Color.parseColor("#4CAF50") // Green
-            "testimonies", "gawahi", "गवाही" -> Color.parseColor("#F44336") // Red
-            "songs", "geeton", "गीतों" -> Color.parseColor("#E91E63") // Pink
-            "prayer", "prarthana", "प्रार्थना" -> Color.parseColor("#673AB7") // Deep Purple
-            "teaching", "shiksha", "शिक्षा" -> Color.parseColor("#009688") // Teal
-            else -> Color.parseColor("#4A90E2") // Default Blue
+            "worship", "aaradhana", "आराधना" -> Color.parseColor("#4A4458") // Dark Purple
+            "sermons", "sermon", "updesh", "उपदेश" -> Color.parseColor("#2D3E50") // Dark Blue
+            "bible-stories", "stories", "kahaniya", "कहानियाँ" -> Color.parseColor("#5D4E37") // Dark Brown
+            "kids", "bacho-ke-liye", "बच्चों-के-लिए" -> Color.parseColor("#2C3E2C") // Dark Green
+            "testimonies", "gawahi", "गवाही" -> Color.parseColor("#4A2D2D") // Dark Red
+            "songs", "geeton", "गीतों" -> Color.parseColor("#4A2E44") // Dark Pink
+            "prayer", "prarthana", "प्रार्थना" -> Color.parseColor("#3D2E4A") // Dark Purple
+            "teaching", "shiksha", "शिक्षा" -> Color.parseColor("#2D4A4A") // Dark Teal
+            else -> Color.parseColor("#2D2D2D") // Default Dark Gray
         }
     }
     

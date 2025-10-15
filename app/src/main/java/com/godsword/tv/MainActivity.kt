@@ -62,7 +62,7 @@ class MainActivity : FragmentActivity() {
                     Log.w(TAG, "Could not set brand color", e)
                 }
                 
-                title = "God'sword.TV - हिंदी क्रिश्चियन वीडियो"
+                title = "परमेश्वर का वचन"
             }
             
             supportFragmentManager.beginTransaction()

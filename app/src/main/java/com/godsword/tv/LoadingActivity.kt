@@ -12,6 +12,7 @@ import android.widget.TextView
 import androidx.fragment.app.FragmentActivity
 import com.godsword.tv.models.Video
 import com.godsword.tv.usb.UsbVideoScanner
+import com.godsword.tv.utils.VideoCacheManager
 import kotlinx.coroutines.*
 
 class LoadingActivity : FragmentActivity() {
@@ -41,8 +42,8 @@ class LoadingActivity : FragmentActivity() {
         // Start animated dots
         startDotsAnimation()
         
-        // Start scanning in background
-        startVideoScanning()
+        // Start loading process
+        startLoadingProcess()
     }
     
     private fun startDotsAnimation() {
@@ -56,41 +57,75 @@ class LoadingActivity : FragmentActivity() {
         })
     }
     
-    private fun startVideoScanning() {
+    private fun startLoadingProcess() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                updateStatus("🔍 Initializing scanner...")
-                delay(500)
-                
-                val scanner = UsbVideoScanner(this@LoadingActivity)
-                
-                updateStatus("📂 Checking USB drive...")
+                updateStatus("🔍 Checking cache...")
                 updateProgress(10)
                 delay(300)
                 
-                updateStatus("🎬 Scanning for videos...")
-                updateProgress(20)
+                // Check if we have cached videos
+                val cachedVideos = VideoCacheManager.loadVideos(this@LoadingActivity)
                 
-                // Scan with progress updates
-                val videos = scanWithProgress(scanner)
-                
-                updateStatus("✓ Scan complete!")
-                updateProgress(100)
-                delay(500)
-                
-                // Save videos and proceed to main activity
-                VideoCache.cachedVideos = videos
-                
-                withContext(Dispatchers.Main) {
-                    startMainActivity(videos.size)
+                if (cachedVideos != null && cachedVideos.isNotEmpty()) {
+                    // ✓ CACHE HIT - Use cached videos (FAST!)
+                    Log.d(TAG, "✓ Using cached videos - skipping scan!")
+                    
+                    updateStatus("✓ Loading cached videos...")
+                    updateProgress(50)
+                    updateProgressText("${cachedVideos.size} videos in cache")
+                    delay(500)
+                    
+                    updateStatus("✓ Ready!")
+                    updateProgress(100)
+                    delay(300)
+                    
+                    // Save to memory cache and proceed
+                    VideoCache.cachedVideos = cachedVideos
+                    
+                    withContext(Dispatchers.Main) {
+                        startMainActivity(cachedVideos.size, fromCache = true)
+                    }
+                    
+                } else {
+                    // ✗ CACHE MISS - Need to scan
+                    Log.d(TAG, "✗ No cache found - performing full scan...")
+                    
+                    updateStatus("📂 Scanning USB drive...")
+                    updateProgress(20)
+                    delay(300)
+                    
+                    val scanner = UsbVideoScanner(this@LoadingActivity)
+                    
+                    updateStatus("🎬 Scanning for videos...")
+                    updateProgress(30)
+                    
+                    // Scan with progress updates
+                    val videos = scanWithProgress(scanner)
+                    
+                    // Save to persistent cache
+                    updateStatus("💾 Saving to cache...")
+                    updateProgress(95)
+                    VideoCacheManager.saveVideos(this@LoadingActivity, videos)
+                    
+                    updateStatus("✓ Scan complete!")
+                    updateProgress(100)
+                    delay(500)
+                    
+                    // Save to memory cache and proceed
+                    VideoCache.cachedVideos = videos
+                    
+                    withContext(Dispatchers.Main) {
+                        startMainActivity(videos.size, fromCache = false)
+                    }
                 }
                 
             } catch (e: Exception) {
-                Log.e(TAG, "Error during scanning", e)
+                Log.e(TAG, "Error during loading", e)
                 withContext(Dispatchers.Main) {
                     updateStatus("❌ Error: ${e.message}")
                     delay(2000)
-                    startMainActivity(0)
+                    startMainActivity(0, fromCache = false)
                 }
             }
         }
@@ -98,7 +133,7 @@ class LoadingActivity : FragmentActivity() {
     
     private suspend fun scanWithProgress(scanner: UsbVideoScanner): List<Video> {
         val videos = mutableListOf<Video>()
-        var progress = 20
+        var progress = 30
         
         // Get all storage locations
         val externalDirs = getExternalFilesDirs(null)
@@ -109,7 +144,7 @@ class LoadingActivity : FragmentActivity() {
         // Simulate progressive scanning
         for (i in externalDirs.indices) {
             delay(100)
-            progress += (60 / totalLocations)
+            progress += (50 / totalLocations)
             updateProgress(progress)
             updateStatus("📂 Scanning location ${i + 1}/${totalLocations}...")
         }
@@ -120,7 +155,7 @@ class LoadingActivity : FragmentActivity() {
         videos.addAll(foundVideos)
         
         // Update progress based on videos found
-        updateProgress(90)
+        updateProgress(85)
         updateStatus("✨ Generating thumbnails...")
         updateProgressText("${videos.size} videos found")
         
@@ -153,10 +188,10 @@ class LoadingActivity : FragmentActivity() {
         }
     }
     
-    private fun startMainActivity(videoCount: Int) {
+    private fun startMainActivity(videoCount: Int, fromCache: Boolean) {
         val intent = Intent(this, MainActivity::class.java).apply {
             putExtra("video_count", videoCount)
-            putExtra("from_loading", true)
+            putExtra("from_cache", fromCache)
         }
         startActivity(intent)
         finish()
@@ -171,7 +206,7 @@ class LoadingActivity : FragmentActivity() {
     }
 }
 
-// Singleton to cache videos
+// Singleton to cache videos in memory (for current session)
 object VideoCache {
     var cachedVideos: List<Video> = emptyList()
 }

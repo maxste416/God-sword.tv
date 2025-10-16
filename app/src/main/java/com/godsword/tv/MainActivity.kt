@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.KeyEvent
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -15,6 +16,7 @@ import androidx.leanback.widget.*
 import com.godsword.tv.adapters.VideoCardPresenter
 import com.godsword.tv.models.Video
 import com.godsword.tv.usb.UsbVideoScanner
+import com.godsword.tv.utils.VideoCacheManager
 
 class MainActivity : FragmentActivity() {
     
@@ -25,6 +27,7 @@ class MainActivity : FragmentActivity() {
     
     private lateinit var usbScanner: UsbVideoScanner
     private lateinit var browseSupportFragment: BrowseSupportFragment
+    private var isFromCache = false
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,6 +35,9 @@ class MainActivity : FragmentActivity() {
         try {
             setContentView(R.layout.activity_main)
             Log.d(TAG, "God'sword.TV - Starting application")
+            
+            // Get cache info
+            isFromCache = intent.getBooleanExtra("from_cache", false)
             
             if (checkStoragePermission()) {
                 initializeApp()
@@ -55,7 +61,6 @@ class MainActivity : FragmentActivity() {
                 headersState = BrowseSupportFragment.HEADERS_ENABLED
                 isHeadersTransitionOnBackEnabled = true
                 
-                // FIXED: Use ContextCompat for API level compatibility
                 try {
                     brandColor = ContextCompat.getColor(this@MainActivity, R.color.primary_blue)
                 } catch (e: Exception) {
@@ -87,10 +92,18 @@ class MainActivity : FragmentActivity() {
                 Log.d(TAG, "Using cached videos: ${VideoCache.cachedVideos.size}")
                 VideoCache.cachedVideos
             } else {
-                // Fallback: scan again if cache is empty
-                Log.d(TAG, "Cache empty, scanning again...")
-                Toast.makeText(this, "पेनड्राइव स्कैन हो रहा है...", Toast.LENGTH_SHORT).show()
-                usbScanner.scanForVideos()
+                // Fallback: try to load from persistent cache
+                Log.d(TAG, "Memory cache empty, trying persistent cache...")
+                val persistedVideos = VideoCacheManager.loadVideos(this)
+                if (persistedVideos != null && persistedVideos.isNotEmpty()) {
+                    VideoCache.cachedVideos = persistedVideos
+                    persistedVideos
+                } else {
+                    // Last resort: scan again
+                    Log.d(TAG, "No cache available, scanning again...")
+                    Toast.makeText(this, "पेनड्राइव स्कैन हो रहा है...", Toast.LENGTH_SHORT).show()
+                    usbScanner.scanForVideos()
+                }
             }
             
             Log.d(TAG, "Displaying ${usbVideos.size} videos")
@@ -123,15 +136,25 @@ class MainActivity : FragmentActivity() {
                 }
             }
             
-            // Show summary
-            val fromLoading = intent.getBooleanExtra("from_loading", false)
-            if (fromLoading) {
+            // Show appropriate message
+            if (isFromCache) {
                 Toast.makeText(
                     this,
-                    "✓ ${usbVideos.size} videos loaded successfully",
+                    "⚡ ${usbVideos.size} videos loaded from cache (instant load!)",
                     Toast.LENGTH_LONG
                 ).show()
+                Log.d(TAG, "✓ Loaded from cache - no scanning needed!")
+            } else {
+                Toast.makeText(
+                    this,
+                    "✓ ${usbVideos.size} videos scanned and cached",
+                    Toast.LENGTH_LONG
+                ).show()
+                Log.d(TAG, "✓ Fresh scan completed and cached")
             }
+            
+            // Show cache info in logs
+            Log.d(TAG, VideoCacheManager.getCacheInfo(this))
             
         } catch (e: Exception) {
             Log.e(TAG, "Error loading videos", e)
@@ -155,9 +178,23 @@ class MainActivity : FragmentActivity() {
     
     private fun playVideo(video: Video) {
         Log.d(TAG, "Playing: ${video.title}")
+        
+        // Get the current video's index and category
+        val allVideos = VideoCache.cachedVideos
+        val currentIndex = allVideos.indexOf(video)
+        
+        // Get videos from the same category for playlist
+        val categoryVideos = allVideos.filter { it.category == video.category }
+        val categoryIndex = categoryVideos.indexOf(video)
+        
+        Log.d(TAG, "Playlist: ${categoryVideos.size} videos in category '${video.category}'")
+        Log.d(TAG, "Current position: ${categoryIndex + 1}/${categoryVideos.size}")
+        
         val intent = Intent(this, PlaybackActivity::class.java).apply {
             putExtra("video_url", video.videoUrl)
             putExtra("video_title", video.title)
+            putExtra("video_index", categoryIndex)
+            putParcelableArrayListExtra("video_playlist", ArrayList(categoryVideos))
         }
         startActivity(intent)
     }
@@ -204,6 +241,40 @@ class MainActivity : FragmentActivity() {
         fragment.adapter = rowsAdapter
         
         Toast.makeText(this, "Error: $errorMsg", Toast.LENGTH_LONG).show()
+    }
+    
+    // Handle MENU button to refresh videos
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_MENU) {
+            showRefreshDialog()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+    
+    private fun showRefreshDialog() {
+        val builder = android.app.AlertDialog.Builder(this)
+        builder.setTitle("Refresh Videos")
+        builder.setMessage("Do you want to rescan the USB drive? This will clear the cache and scan for new videos.")
+        builder.setPositiveButton("Yes, Rescan") { _, _ ->
+            refreshVideos()
+        }
+        builder.setNegativeButton("Cancel", null)
+        builder.show()
+    }
+    
+    private fun refreshVideos() {
+        Toast.makeText(this, "Clearing cache and rescanning...", Toast.LENGTH_SHORT).show()
+        
+        // Clear cache
+        VideoCacheManager.clearCache(this)
+        VideoCache.cachedVideos = emptyList()
+        
+        // Restart app to trigger rescan
+        val intent = Intent(this, LoadingActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        startActivity(intent)
+        finish()
     }
     
     private fun checkStoragePermission(): Boolean {

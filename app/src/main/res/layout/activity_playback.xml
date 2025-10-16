@@ -4,9 +4,115 @@
     android:layout_height="match_parent"
     android:background="#000000">
     
+    <!-- Video Player -->
     <androidx.media3.ui.PlayerView
         android:id="@+id/player_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:keepScreenOn="true" />
+    
+    <!-- Auto-Play Next Video Overlay -->
+    <FrameLayout
+        android:id="@+id/autoplay_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#CC000000"
+        android:visibility="gone"
+        android:focusable="true"
+        android:clickable="true">
+        
+        <!-- Auto-Play Card (Netflix/YouTube Style) -->
+        <LinearLayout
+            android:layout_width="500dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:background="#DD1A1A1A"
+            android:orientation="vertical"
+            android:padding="32dp"
+            android:elevation="16dp">
+            
+            <!-- Title -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Playing Next"
+                android:textColor="#FFFFFF"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginBottom="16dp" />
+            
+            <!-- Countdown Circle -->
+            <RelativeLayout
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginBottom="24dp">
+                
+                <!-- Progress Circle -->
+                <ProgressBar
+    android:id="@+id/countdown_progress"
+    style="?android:attr/progressBarStyleHorizontal"
+    android:layout_width="120dp"
+    android:layout_height="120dp"
+    android:indeterminate="false"
+    android:max="100"
+    android:progress="0"
+    android:progressTint="#FFD700"
+    android:progressBackgroundTint="#3D3D3D" />
+                
+                <!-- Countdown Number -->
+                <TextView
+                    android:id="@+id/countdown_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_centerInParent="true"
+                    android:text="5"
+                    android:textColor="#FFD700"
+                    android:textSize="56sp"
+                    android:textStyle="bold"
+                    android:shadowColor="#000000"
+                    android:shadowDx="2"
+                    android:shadowDy="2"
+                    android:shadowRadius="4" />
+            </RelativeLayout>
+            
+            <!-- Next Video Title -->
+            <TextView
+                android:id="@+id/next_video_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Next: Video Title Here"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textAlignment="center"
+                android:maxLines="2"
+                android:ellipsize="end"
+                android:layout_marginBottom="24dp" />
+            
+            <!-- Instructions -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:orientation="vertical"
+                android:gravity="center">
+                
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="⬅️ BACK to cancel"
+                    android:textColor="#B0B0B0"
+                    android:textSize="14sp"
+                    android:layout_marginBottom="4dp" />
+                
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="➡️ RIGHT to play now"
+                    android:textColor="#B0B0B0"
+                    android:textSize="14sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
 </FrameLayout>

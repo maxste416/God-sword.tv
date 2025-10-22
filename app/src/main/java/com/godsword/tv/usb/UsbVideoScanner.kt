@@ -3,10 +3,12 @@ package com.godsword.tv.usb
 import android.content.Context
 import android.os.Build
 import android.os.Environment
+import android.os.storage.StorageManager
 import android.util.Log
 import com.godsword.tv.models.Video
 import com.godsword.tv.utils.ThumbnailGenerator
 import java.io.File
+import java.lang.reflect.Method
 
 class UsbVideoScanner(private val context: Context) {
 
@@ -23,67 +25,72 @@ class UsbVideoScanner(private val context: Context) {
     fun scanForVideos(): List<Video> {
         val videos = mutableListOf<Video>()
 
-        Log.d(TAG, "Starting comprehensive video scan...")
+        Log.d(TAG, "=== Starting Video Scan ===")
+        Log.d(TAG, "Android Version: ${Build.VERSION.SDK_INT} (${Build.VERSION.RELEASE})")
+        Log.d(TAG, "Device: ${Build.MANUFACTURER} ${Build.MODEL}")
         
-        // EMULATOR TEST MODE: Check if running on emulator
         val isEmulator = isEmulator()
         if (isEmulator) {
-            Log.d(TAG, "🧪 EMULATOR DETECTED - Including test paths")
+            Log.d(TAG, "🧪 EMULATOR DETECTED")
         }
 
-        // 1. Scan external storage directories
-        val externalDirs = context.getExternalFilesDirs(null)
-        Log.d(TAG, "Found ${externalDirs.size} external storage locations")
-
-        for (dir in externalDirs) {
-            if (dir != null) {
-                Log.d(TAG, "Checking: ${dir.absolutePath}")
-                val root = findStorageRoot(dir)
-                if (root != null && root.exists()) {
-                    Log.d(TAG, "Scanning root: ${root.absolutePath}")
-                    videos.addAll(scanDirectory(root, maxDepth = 4))
-                }
+        // 1. Get all available storage volumes
+        val storageVolumes = getAllStorageVolumes()
+        Log.d(TAG, "Found ${storageVolumes.size} storage volumes:")
+        storageVolumes.forEachIndexed { index, path ->
+            val dir = File(path)
+            val accessible = dir.exists() && dir.canRead()
+            val fileCount = if (accessible) dir.listFiles()?.size ?: 0 else 0
+            Log.d(TAG, "  [$index] $path (accessible: $accessible, files: $fileCount)")
+            
+            if (accessible) {
+                Log.d(TAG, "      Scanning: $path")
+                videos.addAll(scanDirectory(dir, maxDepth = 5))
             }
         }
 
-        // 2. Common USB mount points
-        val commonPaths = mutableListOf(
-            "/storage/usbotg",
-            "/storage/usb",
-            "/storage/usb1",
-            "/mnt/media_rw",
-            "/mnt/usb",
-            "/mnt/usbhost",
-            "/storage/sdcard1",
-            Environment.getExternalStorageDirectory().absolutePath
-        )
-        
-        // 3. EMULATOR: Add test video paths
-        if (isEmulator) {
-            commonPaths.add("/sdcard/TestVideos")
-            commonPaths.add("/sdcard/Movies")
-            commonPaths.add("/sdcard/Download")
-            Log.d(TAG, "🧪 Added emulator test paths")
+        // 2. Scan app-specific external directories
+        val externalDirs = context.getExternalFilesDirs(null)
+        Log.d(TAG, "\nScanning ${externalDirs.size} app-specific directories:")
+        externalDirs.filterNotNull().forEachIndexed { index, dir ->
+            Log.d(TAG, "  [$index] ${dir.absolutePath}")
+            val root = findStorageRoot(dir)
+            if (root != null && root.exists() && root.canRead()) {
+                Log.d(TAG, "      Root: ${root.absolutePath}")
+                videos.addAll(scanDirectory(root, maxDepth = 5))
+            }
         }
 
-        for (path in commonPaths) {
+        // 3. Common paths
+        val commonPaths = getCommonVideoPaths(isEmulator)
+        Log.d(TAG, "\nChecking ${commonPaths.size} common video paths:")
+        commonPaths.forEachIndexed { index, path ->
             val dir = File(path)
-            if (dir.exists() && dir.canRead()) {
-                Log.d(TAG, "Scanning path: $path")
+            val accessible = dir.exists() && dir.canRead()
+            Log.d(TAG, "  [$index] $path (accessible: $accessible)")
+            
+            if (accessible) {
                 videos.addAll(scanDirectory(dir, maxDepth = 4))
-            } else {
-                Log.d(TAG, "Path not accessible: $path")
             }
         }
 
         val uniqueVideos = videos.distinctBy { it.videoUrl }
-        Log.d(TAG, "✓ Total unique videos found: ${uniqueVideos.size}")
+        
+        Log.d(TAG, "\n=== Scan Complete ===")
+        Log.d(TAG, "✓ Total videos found: ${uniqueVideos.size}")
         
         if (uniqueVideos.isEmpty()) {
-            Log.w(TAG, "⚠️ No videos found! Check:")
-            Log.w(TAG, "  1. USB drive is connected (or test videos on emulator)")
-            Log.w(TAG, "  2. Storage permissions granted")
-            Log.w(TAG, "  3. Videos are in supported formats: ${VIDEO_EXTENSIONS.joinToString()}")
+            Log.w(TAG, "\n⚠️ NO VIDEOS FOUND!")
+            Log.w(TAG, "Troubleshooting:")
+            Log.w(TAG, "  1. Check USB drive is connected")
+            Log.w(TAG, "  2. Check storage permissions granted")
+            Log.w(TAG, "  3. Check video files exist (formats: ${VIDEO_EXTENSIONS.take(5).joinToString()})")
+            Log.w(TAG, "  4. For emulator: Add test videos to /sdcard/Movies or /sdcard/Download")
+        } else {
+            Log.d(TAG, "Categories found:")
+            uniqueVideos.groupBy { it.category }.forEach { (category, vids) ->
+                Log.d(TAG, "  - $category: ${vids.size} videos")
+            }
         }
         
         // Generate thumbnails for first 10 videos
@@ -92,6 +99,93 @@ class UsbVideoScanner(private val context: Context) {
         }
         
         return uniqueVideos
+    }
+    
+    /**
+     * Get all available storage volumes using StorageManager
+     */
+    private fun getAllStorageVolumes(): List<String> {
+        val volumes = mutableListOf<String>()
+        
+        try {
+            val storageManager = context.getSystemService(Context.STORAGE_SERVICE) as StorageManager
+            
+            // Use reflection to access storage volumes (works on most devices)
+            val storageVolumeClass = Class.forName("android.os.storage.StorageVolume")
+            val getVolumeListMethod: Method = storageManager.javaClass.getMethod("getVolumeList")
+            val volumeList = getVolumeListMethod.invoke(storageManager) as Array<*>
+            
+            for (volume in volumeList) {
+                try {
+                    val getPathMethod: Method = storageVolumeClass.getMethod("getPath")
+                    val path = getPathMethod.invoke(volume) as String
+                    volumes.add(path)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error getting volume path", e)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error accessing StorageManager", e)
+        }
+        
+        return volumes
+    }
+    
+    /**
+     * Get common paths where videos might be located
+     */
+    private fun getCommonVideoPaths(isEmulator: Boolean): List<String> {
+        val paths = mutableListOf<String>()
+        
+        // Standard Android paths
+        paths.add(Environment.getExternalStorageDirectory().absolutePath)
+        paths.add("${Environment.getExternalStorageDirectory()}/Movies")
+        paths.add("${Environment.getExternalStorageDirectory()}/Download")
+        paths.add("${Environment.getExternalStorageDirectory()}/DCIM")
+        
+        // USB mount points (various Android devices)
+        paths.addAll(listOf(
+            "/storage/usbotg",
+            "/storage/usb",
+            "/storage/usb1",
+            "/storage/usb2",
+            "/storage/usbdisk",
+            "/storage/usbdisk1",
+            "/mnt/media_rw",
+            "/mnt/usb",
+            "/mnt/usbhost",
+            "/mnt/usb_storage",
+            "/mnt/usbstorage",
+            "/mnt/usb1",
+            "/storage/sdcard1",
+            "/storage/extSdCard"
+        ))
+        
+        // Emulator-specific paths
+        if (isEmulator) {
+            paths.addAll(listOf(
+                "/sdcard/TestVideos",
+                "/sdcard/Videos",
+                "/sdcard/Movies",
+                "/sdcard/Download"
+            ))
+        }
+        
+        // Check /storage directory for any mounted devices
+        try {
+            val storageDir = File("/storage")
+            if (storageDir.exists() && storageDir.canRead()) {
+                storageDir.listFiles()?.forEach { file ->
+                    if (file.isDirectory && file.name != "emulated" && file.name != "self") {
+                        paths.add(file.absolutePath)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking /storage directory", e)
+        }
+        
+        return paths.distinct()
     }
     
     /**
@@ -129,7 +223,7 @@ class UsbVideoScanner(private val context: Context) {
     private fun scanDirectory(
         directory: File,
         currentDepth: Int = 0,
-        maxDepth: Int = 4
+        maxDepth: Int = 5
     ): List<Video> {
         val videos = mutableListOf<Video>()
 
@@ -139,12 +233,10 @@ class UsbVideoScanner(private val context: Context) {
 
         try {
             if (!directory.canRead()) {
-                Log.d(TAG, "Cannot read directory: ${directory.absolutePath}")
                 return videos
             }
 
             val files = directory.listFiles() ?: return videos
-            Log.d(TAG, "Found ${files.size} items in ${directory.name}")
 
             for (file in files) {
                 try {
@@ -154,7 +246,7 @@ class UsbVideoScanner(private val context: Context) {
                         }
                         file.isFile && isVideoFile(file) && file.canRead() -> {
                             videos.add(createVideoFromFile(file))
-                            Log.d(TAG, "✓ Found video: ${file.name} (${formatFileSize(file.length())})")
+                            Log.d(TAG, "    ✓ ${file.name} (${formatFileSize(file.length())})")
                         }
                     }
                 } catch (e: Exception) {
@@ -162,7 +254,7 @@ class UsbVideoScanner(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error scanning directory: ${directory.name}", e)
+            Log.e(TAG, "Error scanning: ${directory.name}", e)
         }
 
         return videos
@@ -172,8 +264,8 @@ class UsbVideoScanner(private val context: Context) {
         val name = folder.name.lowercase()
         val skipList = listOf(
             "android", "system", "data", "cache",
-            ".", "lost+found", "dcim",
-            "thumbnails", ".thumbnails"
+            ".", "lost+found",
+            "thumbnails", ".thumbnails", ".trash"
         )
         return skipList.any { name.contains(it) }
     }
@@ -183,10 +275,6 @@ class UsbVideoScanner(private val context: Context) {
         val isVideo = VIDEO_EXTENSIONS.contains(extension)
         val isLargeEnough = file.length() > 1024 * 1024 // > 1MB
         
-        if (isVideo && !isLargeEnough) {
-            Log.d(TAG, "Skipping small file: ${file.name} (${formatFileSize(file.length())})")
-        }
-        
         return isVideo && isLargeEnough
     }
 
@@ -195,16 +283,14 @@ class UsbVideoScanner(private val context: Context) {
         val folderName = file.parentFile?.name ?: "Videos"
         val fileSize = formatFileSize(file.length())
         
-        // Get actual video duration
         val duration = ThumbnailGenerator.getVideoDuration(file.absolutePath)
-        
         val thumbnailPath = findThumbnail(file)
 
         return Video(
             id = file.absolutePath,
             title = fileName,
             description = "Folder: ${file.parentFile?.name ?: "Unknown"}\nSize: $fileSize",
-            duration = duration, // Now shows actual duration like "5:32" or "1:23:45"
+            duration = duration,
             thumbnailUrl = thumbnailPath ?: "",
             videoUrl = file.absolutePath,
             category = folderName
@@ -235,7 +321,6 @@ class UsbVideoScanner(private val context: Context) {
         for (name in possibleNames) {
             val thumbFile = File(parentDir, name)
             if (thumbFile.exists() && thumbFile.canRead()) {
-                Log.d(TAG, "Found manual thumbnail: ${thumbFile.name}")
                 return thumbFile.absolutePath
             }
         }
@@ -254,7 +339,7 @@ class UsbVideoScanner(private val context: Context) {
     }
     
     private fun generateInitialThumbnails(videos: List<Video>) {
-        Log.d(TAG, "Generating thumbnails for first ${videos.size} videos...")
+        Log.d(TAG, "\nGenerating thumbnails for first ${videos.size} videos...")
         
         var generated = 0
         videos.forEach { video ->
@@ -273,7 +358,7 @@ class UsbVideoScanner(private val context: Context) {
             }
         }
         
-        Log.d(TAG, "Generated $generated thumbnails")
+        Log.d(TAG, "Generated $generated new thumbnails")
     }
 
     private fun formatFileSize(bytes: Long): String {
@@ -286,13 +371,6 @@ class UsbVideoScanner(private val context: Context) {
     }
 
     fun getUsbDrivePaths(): List<String> {
-        val paths = mutableListOf<String>()
-        val externalFiles = context.getExternalFilesDirs(null)
-        for (file in externalFiles) {
-            if (file != null) {
-                paths.add(file.absolutePath)
-            }
-        }
-        return paths
+        return getAllStorageVolumes()
     }
 }

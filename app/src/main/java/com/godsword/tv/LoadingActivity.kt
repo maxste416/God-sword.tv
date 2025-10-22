@@ -1,7 +1,10 @@
 package com.godsword.tv
 
+import android.Manifest
 import android.animation.ObjectAnimator
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -9,6 +12,9 @@ import android.util.Log
 import android.view.animation.LinearInterpolator
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import com.godsword.tv.models.Video
 import com.godsword.tv.usb.UsbVideoScanner
@@ -19,6 +25,7 @@ class LoadingActivity : FragmentActivity() {
     
     companion object {
         private const val TAG = "LoadingActivity"
+        private const val REQUEST_STORAGE_PERMISSION = 100
     }
     
     private lateinit var progressBar: ProgressBar
@@ -28,6 +35,7 @@ class LoadingActivity : FragmentActivity() {
     
     private val handler = Handler(Looper.getMainLooper())
     private var dotCount = 0
+    private var permissionGranted = false
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,8 +50,110 @@ class LoadingActivity : FragmentActivity() {
         // Start animated dots
         startDotsAnimation()
         
-        // Start loading process
-        startLoadingProcess()
+        // Check permissions first, THEN start loading
+        checkAndRequestPermissions()
+    }
+    
+    /**
+     * Check if storage permission is granted
+     */
+    private fun hasStoragePermission(): Boolean {
+        return when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> {
+                // Android 13+ (API 33+) - Need READ_MEDIA_VIDEO
+                ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.READ_MEDIA_VIDEO
+                ) == PackageManager.PERMISSION_GRANTED
+            }
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
+                // Android 6-12 - Need READ_EXTERNAL_STORAGE
+                ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.READ_EXTERNAL_STORAGE
+                ) == PackageManager.PERMISSION_GRANTED
+            }
+            else -> true // No runtime permissions needed for older Android
+        }
+    }
+    
+    /**
+     * Check permissions and request if needed
+     */
+    private fun checkAndRequestPermissions() {
+        if (hasStoragePermission()) {
+            Log.d(TAG, "✓ Storage permission already granted")
+            permissionGranted = true
+            startLoadingProcess()
+        } else {
+            Log.d(TAG, "⚠️ Storage permission NOT granted - requesting...")
+            updateStatus("📋 Requesting storage permission...")
+            updateProgress(5)
+            
+            // Request permission
+            when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> {
+                    ActivityCompat.requestPermissions(
+                        this,
+                        arrayOf(Manifest.permission.READ_MEDIA_VIDEO),
+                        REQUEST_STORAGE_PERMISSION
+                    )
+                    Log.d(TAG, "Requesting READ_MEDIA_VIDEO for Android 13+")
+                }
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
+                    ActivityCompat.requestPermissions(
+                        this,
+                        arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE),
+                        REQUEST_STORAGE_PERMISSION
+                    )
+                    Log.d(TAG, "Requesting READ_EXTERNAL_STORAGE")
+                }
+            }
+        }
+    }
+    
+    /**
+     * Handle permission result
+     */
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        
+        if (requestCode == REQUEST_STORAGE_PERMISSION) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Log.d(TAG, "✓ Storage permission GRANTED by user")
+                permissionGranted = true
+                runOnUiThread {
+                    updateStatus("✓ Permission granted!")
+                    updateProgress(10)
+                }
+                
+                // Small delay to show permission success message
+                handler.postDelayed({
+                    startLoadingProcess()
+                }, 500)
+                
+            } else {
+                Log.e(TAG, "✗ Storage permission DENIED by user")
+                runOnUiThread {
+                    updateStatus("⚠️ Storage permission denied")
+                    progressText.text = "Permission required to access videos"
+                    Toast.makeText(
+                        this,
+                        "Storage permission is required to scan for videos. Please grant permission in Settings.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                
+                // Wait 3 seconds then proceed anyway (will show empty list)
+                handler.postDelayed({
+                    startMainActivity(0, fromCache = false)
+                }, 3000)
+            }
+        }
     }
     
     private fun startDotsAnimation() {
@@ -58,10 +168,15 @@ class LoadingActivity : FragmentActivity() {
     }
     
     private fun startLoadingProcess() {
+        if (!permissionGranted) {
+            Log.e(TAG, "Cannot start loading - permission not granted")
+            return
+        }
+        
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 updateStatus("🔍 Checking cache...")
-                updateProgress(10)
+                updateProgress(15)
                 delay(300)
                 
                 // Check if we have cached videos
@@ -92,13 +207,13 @@ class LoadingActivity : FragmentActivity() {
                     Log.d(TAG, "✗ No cache found - performing full scan...")
                     
                     updateStatus("📂 Scanning USB drive...")
-                    updateProgress(20)
+                    updateProgress(25)
                     delay(300)
                     
                     val scanner = UsbVideoScanner(this@LoadingActivity)
                     
                     updateStatus("🎬 Scanning for videos...")
-                    updateProgress(30)
+                    updateProgress(35)
                     
                     // Scan with progress updates
                     val videos = scanWithProgress(scanner)
@@ -133,7 +248,7 @@ class LoadingActivity : FragmentActivity() {
     
     private suspend fun scanWithProgress(scanner: UsbVideoScanner): List<Video> {
         val videos = mutableListOf<Video>()
-        var progress = 30
+        var progress = 35
         
         // Get all storage locations
         val externalDirs = getExternalFilesDirs(null)
@@ -156,7 +271,7 @@ class LoadingActivity : FragmentActivity() {
         
         // Update progress based on videos found
         updateProgress(85)
-        updateStatus("✨ Generating thumbnails...")
+        updateStatus("✨ Processing videos...")
         updateProgressText("${videos.size} videos found")
         
         delay(500)

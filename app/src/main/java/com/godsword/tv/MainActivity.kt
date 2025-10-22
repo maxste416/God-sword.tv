@@ -1,14 +1,10 @@
 package com.godsword.tv
 
-import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
 import android.widget.Toast
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.leanback.app.BrowseSupportFragment
@@ -22,7 +18,6 @@ class MainActivity : FragmentActivity() {
     
     companion object {
         private const val TAG = "MainActivity"
-        private const val REQUEST_STORAGE_PERMISSION = 100
     }
     
     private lateinit var usbScanner: UsbVideoScanner
@@ -34,16 +29,14 @@ class MainActivity : FragmentActivity() {
         
         try {
             setContentView(R.layout.activity_main)
-            Log.d(TAG, "God'sword.TV - Starting application")
+            Log.d(TAG, "God'sword.TV - Starting main activity")
             
             // Get cache info
             isFromCache = intent.getBooleanExtra("from_cache", false)
             
-            if (checkStoragePermission()) {
-                initializeApp()
-            } else {
-                requestStoragePermission()
-            }
+            // Initialize app (permissions already handled in LoadingActivity)
+            initializeApp()
+            
         } catch (e: Exception) {
             Log.e(TAG, "Fatal error in onCreate", e)
             Toast.makeText(this, "App failed to start: ${e.message}", Toast.LENGTH_LONG).show()
@@ -206,7 +199,7 @@ class MainActivity : FragmentActivity() {
         val emptyVideo = Video(
             id = "empty",
             title = "📱 पेनड्राइव नहीं मिला",
-            description = "USB Pendrive not detected",
+            description = "USB Pendrive not detected or no videos found",
             duration = "",
             thumbnailUrl = "",
             videoUrl = "",
@@ -218,7 +211,11 @@ class MainActivity : FragmentActivity() {
         rowsAdapter.add(ListRow(header, listRowAdapter))
         fragment.adapter = rowsAdapter
         
-        Toast.makeText(this, "कृपया पेनड्राइव लगाएं", Toast.LENGTH_LONG).show()
+        Toast.makeText(
+            this,
+            "कृपया पेनड्राइव लगाएं या MENU बटन दबाकर rescan करें",
+            Toast.LENGTH_LONG
+        ).show()
     }
     
     private fun showErrorMessage(fragment: BrowseSupportFragment, errorMsg: String) {
@@ -275,66 +272,5 @@ class MainActivity : FragmentActivity() {
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         startActivity(intent)
         finish()
-    }
-    
-    private fun checkStoragePermission(): Boolean {
-        return when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> {
-                // Android 13+ (API 33+) - Need READ_MEDIA_VIDEO
-                ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.READ_MEDIA_VIDEO
-                ) == PackageManager.PERMISSION_GRANTED
-            }
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
-                // Android 6-12 - Need READ_EXTERNAL_STORAGE
-                ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.READ_EXTERNAL_STORAGE
-                ) == PackageManager.PERMISSION_GRANTED
-            }
-            else -> true
-        }
-    }
-    
-    private fun requestStoragePermission() {
-        when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> {
-                // Android 13+ - Request READ_MEDIA_VIDEO
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(Manifest.permission.READ_MEDIA_VIDEO),
-                    REQUEST_STORAGE_PERMISSION
-                )
-                Log.d(TAG, "Requesting READ_MEDIA_VIDEO permission for Android 13+")
-            }
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
-                // Android 6-12 - Request READ_EXTERNAL_STORAGE
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE),
-                    REQUEST_STORAGE_PERMISSION
-                )
-                Log.d(TAG, "Requesting READ_EXTERNAL_STORAGE permission")
-            }
-        }
-    }
-    
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        
-        if (requestCode == REQUEST_STORAGE_PERMISSION) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Log.d(TAG, "Storage permission granted")
-                initializeApp()
-            } else {
-                Toast.makeText(this, "Storage permission required", Toast.LENGTH_LONG).show()
-                initializeApp()
-            }
-        }
     }
 }

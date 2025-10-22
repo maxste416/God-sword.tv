@@ -87,8 +87,8 @@ class LoadingActivity : FragmentActivity() {
             startLoadingProcess()
         } else {
             Log.d(TAG, "⚠️ Storage permission NOT granted - requesting...")
-            updateStatus("📋 Requesting storage permission...")
-            updateProgress(5)
+            statusText.text = "📋 Requesting storage permission..."
+            progressBar.progress = 5
             
             // Request permission
             when {
@@ -126,10 +126,9 @@ class LoadingActivity : FragmentActivity() {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 Log.d(TAG, "✓ Storage permission GRANTED by user")
                 permissionGranted = true
-                runOnUiThread {
-                    updateStatus("✓ Permission granted!")
-                    updateProgress(10)
-                }
+                
+                statusText.text = "✓ Permission granted!"
+                progressBar.progress = 10
                 
                 // Small delay to show permission success message
                 handler.postDelayed({
@@ -138,15 +137,14 @@ class LoadingActivity : FragmentActivity() {
                 
             } else {
                 Log.e(TAG, "✗ Storage permission DENIED by user")
-                runOnUiThread {
-                    updateStatus("⚠️ Storage permission denied")
-                    progressText.text = "Permission required to access videos"
-                    Toast.makeText(
-                        this,
-                        "Storage permission is required to scan for videos. Please grant permission in Settings.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
+                
+                statusText.text = "⚠️ Storage permission denied"
+                progressText.text = "Permission required to access videos"
+                Toast.makeText(
+                    this,
+                    "Storage permission is required to scan for videos. Please grant permission in Settings.",
+                    Toast.LENGTH_LONG
+                ).show()
                 
                 // Wait 3 seconds then proceed anyway (will show empty list)
                 handler.postDelayed({
